@@ -1,0 +1,136 @@
+﻿@model List<(int Index, GenreClassification.Models.Book BookData)>
+
+@{
+    ViewData["Title"] = "Books List";
+
+    var currentSearch = ViewData["CurrentSearch"] as string;
+    var currentSort = ViewData["CurrentSort"] as string ?? "asc";
+    var currentGenre = ViewData["CurrentGenre"] as string ?? "All";
+    var currentPage = (int)ViewData["CurrentPage"];
+    var totalPages = (int)ViewData["TotalPages"];
+
+    string GenerateUrl(int page) =>
+        Url.Action("List", "Home", new { search = currentSearch, genreFilter = currentGenre, sort = currentSort, page = page });
+
+    string nextSort = currentSort == "asc" ? "desc" : "asc";
+}
+
+<div class="container mt-5">
+    <h1>Books</h1>
+
+    <form method="get" class="form-inline mb-3 align-items-center">
+        <div class="form-group mr-2">
+            <input type="text" name="search" class="form-control" placeholder="Search by title or genre" value="@currentSearch" />
+        </div>
+        <br />
+        <div class="form-group mr-2">
+            <select id="genreFilter" name="genreFilter" class="form-control">
+                <option value="All">All Genres</option>
+            </select>
+        </div>
+        <br />
+        <input type="hidden" name="sort" value="@currentSort" />
+
+        <button type="submit" class="btn btn-primary mr-2">Search/Filter</button>
+
+        <a class="btn btn-secondary mr-2 @(currentPage == 1 ? "disabled" : "")" href="@GenerateUrl(currentPage - 1)">Previous</a>
+
+        <a class="btn btn-secondary @(currentPage == totalPages ? "disabled" : "")" href="@GenerateUrl(currentPage + 1)">Next</a>
+    </form>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Genre</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model)
+            {
+                <tr data-line-index="@item.Index">
+                    <td>
+                        <span style="display: inline-block; max-width: 600px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                              title="@item.BookData.Title">
+                            @item.BookData.Title
+                        </span>
+                    </td>
+                    <td>
+                        <span style="display: inline-block; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                              title="@item.BookData.Genre">
+                            @item.BookData.Genre
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="deleteBook(@item.Index)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let allGenres = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const response = await fetch('/Home/GetAllGenres');
+            if (response.ok) {
+                allGenres = await response.json();
+                populateGenreFilter(allGenres, "@currentGenre");
+            } else {
+                console.error("Failed to fetch genres.");
+            }
+        } catch (error) {
+            console.error('Error loading genres:', error);
+        }
+    });
+
+    function populateGenreFilter(genres, selectedGenre) {
+        const genreSelect = document.getElementById('genreFilter');
+        genreSelect.innerHTML = '';
+
+        const allOption = document.createElement('option');
+        allOption.value = 'All';
+        allOption.text = 'All Genres';
+        genreSelect.appendChild(allOption);
+
+        genres.forEach(g => {
+            const option = document.createElement('option');
+            option.value = g;
+            option.text = g;
+            if (g === selectedGenre) {
+                option.selected = true;
+            }
+            genreSelect.appendChild(option);
+        });
+    }
+
+    async function deleteBook(lineIndex) {
+        if (!confirm("Are you sure you want to delete this book?")) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/Home/DeleteFromDatabase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(lineIndex)
+            });
+            if (response.ok) {
+                const result = await response.json();
+                alert(result.message);
+                window.location.reload();
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.error}`);
+            }
+        } catch (e) {
+            alert('An error occurred: ' + e.message);
+        }
+    }
+</script>

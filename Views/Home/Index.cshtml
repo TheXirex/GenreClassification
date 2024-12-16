@@ -1,0 +1,148 @@
+﻿@using Newtonsoft.Json;
+@{
+    ViewData["Title"] = "Genre Classifier";
+    var allGenres = ViewData["AllGenres"] as List<string>;
+}
+
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Book Genre Prediction</h1>
+    <div class="form-group">
+        <input type="text" id="Title" class="form-control" placeholder="Enter a book title..." required />
+    </div>
+    <br />
+    <button type="button" class="btn btn-primary" onclick="predictGenre()">Predict</button>
+
+    <div id="predictionResult" class="alert alert-info mt-4 d-none">
+        <div class="form-group">
+            <label>Predicted / Chosen Genre:</label>
+            <select id="genreSelect" class="form-control" style="display:inline-block; width:auto;">
+            </select>
+            <br />
+            <input type="text" id="newGenreInput" class="form-control mt-2" placeholder="Enter new genre..." style="display:none; width:auto;" />
+        </div>
+
+        <button id="addToDbBtn" type="button" class="btn btn-success mt-2 d-none" onclick="addToDatabase()">Add to Database</button>
+    </div>
+</div>
+
+<script>
+    let predictedTitle = '';
+    let predictedGenre = '';
+    let allGenres = @Html.Raw(JsonConvert.SerializeObject(allGenres));
+
+    async function predictGenre() {
+        const title = document.getElementById('Title').value;
+
+        if (!title) {
+            alert("Please enter a book title.");
+            return;
+        }
+
+        const data = { Title: title };
+        try {
+            const response = await fetch('/Home/Predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            if (response.ok) {
+                const result = await response.json();
+                predictedTitle = title;
+                predictedGenre = result.genre;
+
+                document.getElementById('predictionResult').classList.remove('d-none');
+                document.getElementById('addToDbBtn').classList.remove('d-none');
+                document.getElementById('addToDbBtn').disabled = false;
+
+                populateGenres(predictedGenre);
+            }
+            else {
+                alert(`Failed to predict genre. Status: ${response.status}`);
+            }
+        }
+        catch (error) {
+            alert('An error occurred: ' + error.message);
+        }
+    }
+
+    function populateGenres(selectedGenre) {
+        const genreSelect = document.getElementById('genreSelect');
+        genreSelect.innerHTML = '';
+
+        let found = allGenres.includes(selectedGenre);
+        if (!found && selectedGenre) {
+            allGenres.push(selectedGenre);
+            allGenres.sort();
+        }
+
+        allGenres.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g;
+            opt.text = g;
+            if (g === selectedGenre) {
+                opt.selected = true;
+            }
+            genreSelect.appendChild(opt);
+        });
+
+        const newOpt = document.createElement('option');
+        newOpt.value = 'AddNew';
+        newOpt.text = 'Add new genre...';
+        genreSelect.appendChild(newOpt);
+
+        genreSelect.addEventListener('change', onGenreChange);
+    }
+
+    function onGenreChange() {
+        const genreSelect = document.getElementById('genreSelect');
+        const newGenreInput = document.getElementById('newGenreInput');
+        if (genreSelect.value === 'AddNew') {
+            newGenreInput.style.display = 'inline-block';
+        } else {
+            newGenreInput.style.display = 'none';
+        }
+    }
+
+    async function addToDatabase() {
+        const genreSelect = document.getElementById('genreSelect');
+        const newGenreInput = document.getElementById('newGenreInput');
+
+        let finalGenre = genreSelect.value;
+        if (finalGenre === 'AddNew') {
+            finalGenre = newGenreInput.value.trim();
+            if (!finalGenre) {
+                alert("Please enter a new genre.");
+                return;
+            }
+        }
+
+        if (!predictedTitle || !finalGenre) {
+            alert("No predicted data available or genre is empty.");
+            return;
+        }
+
+        const data = { Title: predictedTitle, Genre: finalGenre };
+        try {
+            const response = await fetch('/Home/AddToDatabase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(result.message);
+
+                document.getElementById('addToDbBtn').disabled = true;
+            } else {
+                alert(`Failed to add book. Status: ${response.status}`);
+            }
+        } catch (error) {
+            alert('An error occurred: ' + error.message);
+        }
+    }
+</script>
